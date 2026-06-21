@@ -21,22 +21,28 @@ object WeatherIconMapper {
         result += "${temperature.toInt()}°C"
         return result
     }
-    
-    
-    fun getWeatherIconResource(iconCode: String): Int {
-        if (iconCode == "01d") return 0
-        else if (iconCode == "01n") return 0
-        else if (iconCode == "02d") return 0
-        else if (iconCode == "02n") return 0
-        else if (iconCode == "03d" || iconCode == "03n") return 0
-        else if (iconCode == "04d" || iconCode == "04n") return 0
-        else if (iconCode == "09d" || iconCode == "09n") return 0
-        else if (iconCode == "10d") return 0
-        else if (iconCode == "10n") return 0
-        else if (iconCode == "11d" || iconCode == "11n") return 0
-        else if (iconCode == "13d" || iconCode == "13n") return 0
-        else if (iconCode == "50d" || iconCode == "50n") return 0
-        else return 0
+
+    fun isValidIconCode(iconCode: String): Boolean {
+        /**
+         * Ошибка 12.
+         * Здесь была обнаружена проблема с использованием iconCode без валидации.
+         * iconCode приходит из ответа API, то есть из внешнего источника,
+         * а затем подставляется в URL для загрузки иконки погоды.
+         * Старый метод getWeatherIconResource() не защищал приложение,
+         * потому что для любого значения возвращал 0.
+         * Чтобы решить эту проблему, я заменила его на проверку по списку допустимых кодов OpenWeather.
+         */
+        return iconCode in setOf(
+            "01d", "01n",
+            "02d", "02n",
+            "03d", "03n",
+            "04d", "04n",
+            "09d", "09n",
+            "10d", "10n",
+            "11d", "11n",
+            "13d", "13n",
+            "50d", "50n"
+        )
     }
     
     

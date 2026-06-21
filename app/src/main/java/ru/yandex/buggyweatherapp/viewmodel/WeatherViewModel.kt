@@ -7,7 +7,6 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -18,6 +17,7 @@ import ru.yandex.buggyweatherapp.model.WeatherData
 import ru.yandex.buggyweatherapp.repository.LocationRepository
 import ru.yandex.buggyweatherapp.repository.WeatherRepository
 import ru.yandex.buggyweatherapp.utils.ImageLoader
+import ru.yandex.buggyweatherapp.utils.WeatherIconMapper
 
 class WeatherViewModel(
     private val savedStateHandle: SavedStateHandle
@@ -39,8 +39,6 @@ class WeatherViewModel(
     val error = MutableLiveData<String>()
     val cityName = MutableLiveData<String>()
 
-
-    private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
     private var isInitialized = false
 
     private var refreshJob: Job? = null
@@ -145,7 +143,18 @@ class WeatherViewModel(
 
 
     fun loadWeatherIcon(iconCode: String) {
-        coroutineScope.launch {
+        /**
+         * Ошибки 11 и 12.
+         * Здесь была обнаружена проблема с запуском корутины в ручном CoroutineScope
+         * и использованием iconCode без проверки.
+         * Ручной CoroutineScope не был привязан к жизненному циклу ViewModel и не отменялся
+         * в onCleared(), поэтому загрузка могла продолжаться после уничтожения ViewModel.
+         * Также добавила проверку для iconCode.
+         */
+        if (!WeatherIconMapper.isValidIconCode(iconCode)) {
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
             val iconUrl = "https://openweathermap.org/img/wn/$iconCode@2x.png"
             ImageLoader.loadImage(iconUrl)
         }
