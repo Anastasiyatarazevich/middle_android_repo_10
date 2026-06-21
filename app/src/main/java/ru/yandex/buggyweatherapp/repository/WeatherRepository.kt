@@ -95,8 +95,15 @@ class WeatherRepository {
             sunsetTime = sys.get("sunset").asLong,
             timezone = json.get("timezone").asInt,
             timestamp = json.get("dt").asLong,
-            rawApiData = json.toString(),
-            rain = if (json.has("rain") && json.getAsJsonObject("rain").has("1h")) 
+            /**
+             * Ошибка 3.
+             * Здесь было обнаружено небезопасное хранение полного raw-ответа API в модели WeatherData.
+             * В ответе API могут находиться данные о местоположении пользователя и другая служебная информация.
+             * Чтобы решить эту проблему, я удалила поле rawApiData и оставила в модели только те данные,
+             * которые действительно нужны для отображения погоды на экране.
+             */
+
+            rain = if (json.has("rain") && json.getAsJsonObject("rain").has("1h"))
                     json.getAsJsonObject("rain").get("1h").asDouble else null,
             snow = if (json.has("snow") && json.getAsJsonObject("snow").has("1h"))
                     json.getAsJsonObject("snow").get("1h").asDouble else null

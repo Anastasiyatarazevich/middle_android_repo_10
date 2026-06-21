@@ -3,31 +3,30 @@ package ru.yandex.buggyweatherapp.viewmodel
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import ru.yandex.buggyweatherapp.WeatherApplication
 import ru.yandex.buggyweatherapp.model.Location
 import ru.yandex.buggyweatherapp.model.WeatherData
 import ru.yandex.buggyweatherapp.repository.LocationRepository
 import ru.yandex.buggyweatherapp.repository.WeatherRepository
 import ru.yandex.buggyweatherapp.utils.ImageLoader
-import java.util.Timer
-import java.util.TimerTask
 
 class WeatherViewModel : ViewModel() {
     
     
-    private lateinit var activityContext: Context
+    private lateinit var applicationContext: Context
     
     
     private val weatherRepository = WeatherRepository()
     private val locationRepository by lazy { 
-        LocationRepository(activityContext)
+        LocationRepository(applicationContext)
     }
     
     
@@ -41,11 +40,19 @@ class WeatherViewModel : ViewModel() {
     private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
     
     
-    private var refreshTimer: Timer? = null
-    
+    private var refreshJob: Job? = null
     
     fun initialize(context: Context) {
-        this.activityContext = context
+        /**
+         * Ошибка 4.
+         * Здесь была обнаружена проблема с возможной утечкой памяти:
+         * во ViewModel сохранялся Context, который мог быть Activity context.
+         * ViewModel может жить дольше Activity, например при смене конфигурации экрана,
+         * поэтому хранение ссылки на Activity может привести к утечке памяти.
+         * Чтобы решить эту проблему, я сохраняю applicationContext вместо Activity context.
+         */
+        this.applicationContext = context.applicationContext
+        this.applicationContext = context
         fetchCurrentLocationWeather()
         
         
@@ -127,17 +134,31 @@ class WeatherViewModel : ViewModel() {
             ImageLoader.loadImage(iconUrl)
         }
     }
-    
-    
+
+
     private fun startAutoRefresh() {
-        refreshTimer = Timer()
-        refreshTimer?.scheduleAtFixedRate(object : TimerTask() {
-            override fun run() {
+        /**
+         * Ошибка 5.
+         * Здесь была обнаружена проблема с автообновлением погоды через Timer.
+         * Timer не был привязан к жизненному циклу ViewModel и мог продолжать выполнять задачи,
+         * даже когда экран уже не используется. Также Android Studio предупреждает,
+         * что scheduleAtFixedRate может неожиданно запускать много задач подряд,
+         * когда процесс приложения переходит из cached-состояния обратно в active.
+         * Чтобы решить эту проблему, я заменила Timer на корутину в viewModelScope.
+         * Такая задача автоматически отменяется вместе с ViewModel.
+         */
+
+        refreshJob?.cancel()
+
+        refreshJob = viewModelScope.launch {
+            while (isActive) {
+                delay(60000)
+
                 currentLocation.value?.let { location ->
                     getWeatherForLocation(location)
                 }
             }
-        }, 60000, 60000)
+        }
     }
     
     
@@ -152,6 +173,7 @@ class WeatherViewModel : ViewModel() {
     
     override fun onCleared() {
         super.onCleared()
-        
+        refreshJob?.cancel()
+        refreshJob = null
     }
 }
