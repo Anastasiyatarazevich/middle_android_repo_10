@@ -41,7 +41,7 @@ class WeatherViewModel(
 
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
-    private var isCurrentWeatherFavorite = false
+    private var isInitialized = false
 
     private var refreshJob: Job? = null
 
@@ -55,21 +55,33 @@ class WeatherViewModel(
          * Чтобы решить эту проблему, я сохраняю applicationContext вместо Activity context.
          */
         this.applicationContext = context.applicationContext
-        fetchCurrentLocationWeather()
+        this.applicationContext = context.applicationContext
 
+        if (isInitialized) return
+
+        isInitialized = true
+
+        val selectedCity = savedStateHandle.get<String>(SELECTED_CITY_KEY)
+
+        if (!selectedCity.isNullOrBlank()) {
+            searchWeatherByCity(selectedCity)
+        } else {
+            fetchCurrentLocationWeather()
+        }
 
         startAutoRefresh()
     }
 
 
     fun fetchCurrentLocationWeather() {
+        savedStateHandle[SELECTED_CITY_KEY] = null
+
         isLoading.value = true
         error.value = null
 
         locationRepository.getCurrentLocation { location ->
             if (location != null) {
                 currentLocation.value = location
-
 
                 val cityNameFromLocation = locationRepository.getCityNameFromLocation(location)
                 cityName.value = cityNameFromLocation
@@ -101,23 +113,25 @@ class WeatherViewModel(
     }
 
     fun searchWeatherByCity(city: String) {
-        if (city.isBlank()) {
+        val trimmedCity = city.trim()
+
+        if (trimmedCity.isBlank()) {
             error.value = "City name cannot be empty"
             return
         }
 
+        savedStateHandle[SELECTED_CITY_KEY] = trimmedCity
+
         isLoading.value = true
         error.value = null
 
-
-        weatherRepository.getWeatherByCity(city) { data, exception ->
+        weatherRepository.getWeatherByCity(trimmedCity) { data, exception ->
 
             isLoading.value = false
 
             if (data != null) {
                 weatherData.value = applyFavoriteState(data)
                 cityName.value = data.cityName
-                currentLocation.value = Location(0.0, 0.0, data.cityName)
             } else {
                 error.value = exception?.message ?: "Unknown error"
             }
@@ -156,8 +170,14 @@ class WeatherViewModel(
             while (isActive) {
                 delay(60000)
 
-                currentLocation.value?.let { location ->
-                    getWeatherForLocation(location)
+                val selectedCity = savedStateHandle.get<String>(SELECTED_CITY_KEY)
+
+                if (!selectedCity.isNullOrBlank()) {
+                    searchWeatherByCity(selectedCity)
+                } else {
+                    currentLocation.value?.let { location ->
+                        getWeatherForLocation(location)
+                    }
                 }
             }
         }
@@ -225,5 +245,6 @@ class WeatherViewModel(
 
     private companion object {
         const val FAVORITE_CITY_KEYS = "favorite_city_keys"
+        const val SELECTED_CITY_KEY = "selected_city"
     }
 }
