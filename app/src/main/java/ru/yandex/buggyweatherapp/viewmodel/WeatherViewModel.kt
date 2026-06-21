@@ -55,7 +55,6 @@ class WeatherViewModel(
          * Чтобы решить эту проблему, я сохраняю applicationContext вместо Activity context.
          */
         this.applicationContext = context.applicationContext
-        this.applicationContext = context
         fetchCurrentLocationWeather()
 
 
