@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -122,18 +123,19 @@ fun DetailedWeatherCard(weather: WeatherData) {
             }
         }
     }
-    
-    
-    DisposableEffect(weather.icon) {
+
+    /**
+     * Ошибка 15.
+     * Здесь синхронная загрузка изображения была заменена на LaunchedEffect.
+     * DisposableEffect выполняется на основном потоке Compose, поэтому вызов
+     * сетевой операции через loadImageSync мог блокировать UI и приводить
+     * к NetworkOnMainThreadException. Асинхронная загрузка переносит сетевую
+     * операцию в Dispatchers.IO внутри ImageLoader.loadImage().
+     */
+    LaunchedEffect(weather.icon) {
         val iconUrl = "https://openweathermap.org/img/wn/${weather.icon}@2x.png"
-        
-        
-        val bitmap = ImageLoader.loadImageSync(iconUrl)
+        val bitmap = ImageLoader.loadImage(iconUrl)
         imageView.setImageBitmap(bitmap)
-        
-        onDispose {
-            
-        }
     }
 }
 

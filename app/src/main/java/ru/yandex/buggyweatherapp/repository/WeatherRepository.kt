@@ -2,48 +2,58 @@ package ru.yandex.buggyweatherapp.repository
 
 import android.util.Log
 import com.google.gson.JsonObject
-import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import ru.yandex.buggyweatherapp.BuildConfig
 import ru.yandex.buggyweatherapp.api.RetrofitInstance
 import ru.yandex.buggyweatherapp.model.Location
 import ru.yandex.buggyweatherapp.model.WeatherData
-import java.util.Date
 
 class WeatherRepository {
-    
-    
+
+
     private val weatherApi = RetrofitInstance.weatherApi
-    
-    
+
+
     private var cachedWeatherData: WeatherData? = null
-    
-    
+
+
     fun getWeatherData(location: Location, callback: (WeatherData?, Exception?) -> Unit) {
-        
+
+        /**
+         * Ошибка 7.
+         * Здесь была обнаружена проблема с выполнением сетевого запроса через call.execute().
+         * Метод execute() выполняет запрос синхронно и может заблокировать главный поток приложения.
+         * Из-за этого приложение может показывать Unknown error или переставать отвечать на действия пользователя.
+         * Чтобы решить эту проблему, я заменила execute() на enqueue(), который выполняет запрос асинхронно.
+         */
         val call = weatherApi.getCurrentWeather(location.latitude, location.longitude)
-        
-        
-        try {
-            
-            val response = call.execute()
-            
-            if (response.isSuccessful) {
-                val weatherData = parseWeatherData(response.body()!!, location)
-                cachedWeatherData = weatherData
-                callback(weatherData, null)
-            } else {
-                
-                callback(null, Exception("API Error: ${response.code()}"))
+
+        call.enqueue(object : Callback<JsonObject> {
+            override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
+                if (response.isSuccessful && response.body() != null) {
+                    try {
+                        val weatherData = parseWeatherData(response.body()!!, location)
+                        cachedWeatherData = weatherData
+                        callback(weatherData, null)
+                    } catch (e: Exception) {
+                        callback(null, e)
+                    }
+                } else {
+                    callback(null, Exception("API Error: ${response.code()}"))
+                }
             }
-        } catch (e: Exception) {
-            
-            Log.e("WeatherRepository", "Error fetching weather", e)
-            callback(null, e)
-        }
+
+            override fun onFailure(call: Call<JsonObject>, t: Throwable) {
+                if (BuildConfig.DEBUG) {
+                    Log.e("WeatherRepository", "Error fetching weather", t)
+                }
+                callback(null, Exception(t.message ?: "Network request failed"))
+            }
+        })
     }
-    
+
     fun getWeatherByCity(cityName: String, callback: (WeatherData?, Exception?) -> Unit) {
         weatherApi.getWeatherByCity(cityName).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
@@ -54,29 +64,29 @@ class WeatherRepository {
                         val weatherData = parseWeatherData(json, location)
                         callback(weatherData, null)
                     } catch (e: Exception) {
-                        
+
                         callback(null, e)
                     }
                 } else {
                     callback(null, Exception("Error fetching weather data"))
                 }
             }
-            
+
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
                 callback(null, Exception(t))
             }
         })
     }
-    
-    
+
+
     private fun parseWeatherData(json: JsonObject, location: Location): WeatherData {
-        
+
         val main = json.getAsJsonObject("main")
         val wind = json.getAsJsonObject("wind")
         val sys = json.getAsJsonObject("sys")
         val weather = json.getAsJsonArray("weather").get(0).asJsonObject
         val clouds = json.getAsJsonObject("clouds")
-        
+
         return WeatherData(
             cityName = json.get("name").asString,
             country = sys.get("country").asString,
@@ -95,20 +105,27 @@ class WeatherRepository {
             sunsetTime = sys.get("sunset").asLong,
             timezone = json.get("timezone").asInt,
             timestamp = json.get("dt").asLong,
-            rawApiData = json.toString(),
-            rain = if (json.has("rain") && json.getAsJsonObject("rain").has("1h")) 
-                    json.getAsJsonObject("rain").get("1h").asDouble else null,
+            /**
+             * Ошибка 3.
+             * Здесь было обнаружено небезопасное хранение полного raw-ответа API в модели WeatherData.
+             * В ответе API могут находиться данные о местоположении пользователя и другая служебная информация.
+             * Чтобы решить эту проблему, я удалила поле rawApiData и оставила в модели только те данные,
+             * которые действительно нужны для отображения погоды на экране.
+             */
+
+            rain = if (json.has("rain") && json.getAsJsonObject("rain").has("1h"))
+                json.getAsJsonObject("rain").get("1h").asDouble else null,
             snow = if (json.has("snow") && json.getAsJsonObject("snow").has("1h"))
-                    json.getAsJsonObject("snow").get("1h").asDouble else null
+                json.getAsJsonObject("snow").get("1h").asDouble else null
         )
     }
-    
+
     private fun extractLocationFromResponse(json: JsonObject): Location {
         val coord = json.getAsJsonObject("coord")
         val lat = coord.get("lat").asDouble
         val lon = coord.get("lon").asDouble
         val name = json.get("name").asString
-        
+
         return Location(lat, lon, name)
     }
 }
