@@ -76,12 +76,11 @@ class LocationTracker private constructor(
              * Это могло приводить к лишнему сбору местоположения пользователя и расходу батареи.
              * Чтобы уменьшить риск, я перед запуском повторно снимаю старую подписку,
              * а также добавляю отдельный метод stopTracking().
-             * Также можно было бы заменить GPS_PROVIDER на NETWORK_PROVIDER.
              */
             stopTracking()
 
             locationManager.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
+                LocationManager.NETWORK_PROVIDER,
                 5000, // 5 секунд
                 10f, // 10 метров
                 locationListener
